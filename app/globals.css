@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
+/* ======================
+   ROOT COLOR VARIABLES
+====================== */
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* ✅ FIX: jangan override warna teks jadi putih
+   karena layout dashboard pakai background putih */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #171717;
   }
 }
 
+/* ======================
+   BASE BODY
+====================== */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ======================
+   FLOATING BACKGROUND
+   (login & dashboard)
+====================== */
+@keyframes floating {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-30px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes floating-slow {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-18px); }
+  100% { transform: translateY(0); }
+}
+
+.animate-floating {
+  animation: floating 8s ease-in-out infinite;
+}
+
+.animate-floating-slow {
+  animation: floating-slow 12s ease-in-out infinite;
+}
+
+/* ======================
+   CARD / CONTENT ENTRANCE
+====================== */
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 1s ease-out forwards;
+}
+
+/* ======================
+   BUTTON UTILITIES
+====================== */
+.btn {
+  @apply rounded-md border border-zinc-300 bg-white px-3 py-2
+         text-xs font-semibold text-zinc-700
+         hover:bg-zinc-50;
+}
+
+.btn-primary {
+  @apply rounded-md bg-[#123473] px-6 py-2
+         text-xs font-semibold text-white
+         shadow-sm hover:brightness-110
+         disabled:opacity-50 disabled:cursor-not-allowed;
 }
