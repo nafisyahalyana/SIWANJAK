@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /* =======================
    TYPE & STORAGE
@@ -55,7 +55,7 @@ type BahanRapat = {
   updatedAt?: string;
 };
 
-const DEFAULT_ROWS = 1; // ✅ cuma 1 baris awal
+const DEFAULT_ROWS = 1;
 const STORAGE_KEY_USULAN = "bnn_usulan_v1";
 const STORAGE_KEY_BAHAN_RAPAT = "bnn_bahan_rapat_v1";
 
@@ -68,48 +68,47 @@ function loadUsulan(): Usulan[] {
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY_USULAN);
-    const arr = raw ? (JSON.parse(raw) as any[]) : [];
+    const arr = raw ? (JSON.parse(raw) as unknown[]) : [];
     if (!Array.isArray(arr)) return [];
 
     let changed = false;
 
     const migrated: Usulan[] = arr.map((x) => {
+      const obj = x as Record<string, unknown>;
+
       const pangkatGol =
-        String(x?.pangkatGol ?? "").trim() || String(x?.pktGol ?? "").trim();
+        String(obj?.pangkatGol ?? "").trim() || String(obj?.pktGol ?? "").trim();
 
-      if (x?.pangkatGol == null && x?.pktGol != null) changed = true;
-      if (x?.jenisPegawai == null) changed = true;
-      if (x?.jabatanUsulan == null) changed = true;
-      if (x?.keterangan == null) changed = true;
+      if (obj?.pangkatGol == null && obj?.pktGol != null) changed = true;
+      if (obj?.jenisPegawai == null) changed = true;
+      if (obj?.jabatanUsulan == null) changed = true;
+      if (obj?.keterangan == null) changed = true;
 
-      const jenisRaw = String(x?.jenisPegawai ?? "PNS").toUpperCase().trim();
+      const jenisRaw = String(obj?.jenisPegawai ?? "PNS").toUpperCase().trim();
       const jenisPegawai: JenisPegawai =
         jenisRaw === "POLRI" ? "POLRI" : jenisRaw === "TNI" ? "TNI" : "PNS";
 
       return {
-        id: String(x?.id ?? crypto.randomUUID()),
+        id: String(obj?.id ?? crypto.randomUUID()),
 
-        esl: String(x?.esl ?? "").trim(),
-        jabatan: String(x?.jabatan ?? "").trim(),
-        nama: String(x?.nama ?? "").trim(),
+        esl: String(obj?.esl ?? "").trim(),
+        jabatan: String(obj?.jabatan ?? "").trim(),
+        nama: String(obj?.nama ?? "").trim(),
 
         jenisPegawai,
         pangkatGol,
 
-        jabatanUsulan: String(x?.jabatanUsulan ?? "").trim(),
-        keterangan: String(x?.keterangan ?? "").trim(),
+        jabatanUsulan: String(obj?.jabatanUsulan ?? "").trim(),
+        keterangan: String(obj?.keterangan ?? "").trim(),
 
-        nrpNip: String(x?.nrpNip ?? "").trim(),
+        nrpNip: String(obj?.nrpNip ?? "").trim(),
 
-        createdAt: String(x?.createdAt ?? new Date().toISOString()),
-        updatedAt: x?.updatedAt ? String(x.updatedAt) : undefined,
+        createdAt: String(obj?.createdAt ?? new Date().toISOString()),
+        updatedAt: obj?.updatedAt ? String(obj.updatedAt) : undefined,
       };
     });
 
-    if (changed) {
-      localStorage.setItem(STORAGE_KEY_USULAN, JSON.stringify(migrated));
-    }
-
+    if (changed) localStorage.setItem(STORAGE_KEY_USULAN, JSON.stringify(migrated));
     return migrated;
   } catch {
     return [];
@@ -120,12 +119,13 @@ function loadBahanRapat(): BahanRapat[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_BAHAN_RAPAT);
-    const data = raw ? (JSON.parse(raw) as any[]) : [];
+    const data = raw ? (JSON.parse(raw) as unknown[]) : [];
     if (!Array.isArray(data)) return [];
 
-    // migrasi ringan status lama "final" -> "diajukan"
     return data.map((x) => {
-      const s = String(x?.status ?? "draft");
+      const obj = x as Record<string, unknown>;
+
+      const s = String(obj?.status ?? "draft");
       const status: BahanRapat["status"] =
         s === "final"
           ? "diajukan"
@@ -133,7 +133,18 @@ function loadBahanRapat(): BahanRapat[] {
           ? s
           : "draft";
 
-      return { ...x, status } as BahanRapat;
+      // pastikan rows array
+      const rows = Array.isArray(obj?.rows) ? (obj.rows as Row[]) : [];
+
+      return {
+        id: String(obj?.id ?? crypto.randomUUID()),
+        tanggal: String(obj?.tanggal ?? "").trim(),
+        materiRapat: String(obj?.materiRapat ?? "").trim(),
+        rows,
+        status,
+        createdAt: String(obj?.createdAt ?? new Date().toISOString()),
+        updatedAt: obj?.updatedAt ? String(obj.updatedAt) : undefined,
+      } as BahanRapat;
     });
   } catch {
     return [];
@@ -173,7 +184,6 @@ function createEmptyRow(no: number): Row {
   };
 }
 
-// opsional: cek baris kosong total (biar tidak nyimpan baris kosong)
 function isRowEmpty(r: Row) {
   const fields = [
     r.esl,
@@ -187,12 +197,28 @@ function isRowEmpty(r: Row) {
   return fields.every((x) => !String(x ?? "").trim());
 }
 
+function reorder<T>(list: T[], from: number, to: number) {
+  const arr = [...list];
+  const [moved] = arr.splice(from, 1);
+  arr.splice(to, 0, moved);
+  return arr;
+}
+
+function renumberRows(rows: Row[]) {
+  return rows.map((r, i) => ({ ...r, no: i + 1 }));
+}
+
 /* =======================
    PAGE
 ======================= */
 
 export default function BuatBahanRapatPage() {
   const router = useRouter();
+  const sp = useSearchParams();
+
+  // ✅ mode edit
+  const editId = sp.get("edit")?.trim() || "";
+  const focusUsulanId = sp.get("focusUsulan")?.trim() || "";
 
   const [tanggal, setTanggal] = useState("");
   const [materiRapat, setMateriRapat] = useState("");
@@ -202,9 +228,43 @@ export default function BuatBahanRapatPage() {
     Array.from({ length: DEFAULT_ROWS }, (_, i) => createEmptyRow(i + 1))
   );
 
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  // untuk auto-scroll ke baris tertentu
+  const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+
   useEffect(() => {
     setUsulanList(loadUsulan());
   }, []);
+
+  // ✅ load data bahan rapat saat edit
+  useEffect(() => {
+    if (!editId) return;
+
+    const all = loadBahanRapat();
+    const found = all.find((x) => x.id === editId);
+    if (!found) return;
+
+    setTanggal(found.tanggal || "");
+    setMateriRapat(found.materiRapat || "");
+
+    const incoming = Array.isArray(found.rows) && found.rows.length ? found.rows : [createEmptyRow(1)];
+    setRows(renumberRows(incoming.map((r) => ({ ...r })))); // clone + renumber
+  }, [editId]);
+
+  // ✅ auto scroll + highlight (opsional)
+  useEffect(() => {
+    if (!focusUsulanId) return;
+    const idx = rows.findIndex((r) => String(r.usulanId || "") === String(focusUsulanId));
+    if (idx < 0) return;
+
+    // tunggu render
+    const t = window.setTimeout(() => {
+      rowRefs.current[idx]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+
+    return () => window.clearTimeout(t);
+  }, [focusUsulanId, rows]);
 
   const canSave = useMemo(() => Boolean(tanggal.trim()), [tanggal]);
 
@@ -232,8 +292,13 @@ export default function BuatBahanRapatPage() {
 
   function removeLastRow() {
     setRows((prev) =>
-      prev.length <= 1 ? prev : prev.slice(0, -1).map((r, i) => ({ ...r, no: i + 1 }))
+      prev.length <= 1 ? prev : renumberRows(prev.slice(0, -1))
     );
+  }
+
+  function moveRow(from: number, to: number) {
+    if (from === to) return;
+    setRows((prev) => renumberRows(reorder(prev, from, to)));
   }
 
   function onSave() {
@@ -242,11 +307,37 @@ export default function BuatBahanRapatPage() {
       return;
     }
 
-    // ✅ buang baris yang benar-benar kosong (biar gak ada baris blank ikut tersimpan)
-    const cleanedRows = rows.filter((r) => !isRowEmpty(r));
+    const cleanedRows = renumberRows(rows.filter((r) => !isRowEmpty(r)));
     const finalRows = cleanedRows.length ? cleanedRows : [createEmptyRow(1)];
 
     const now = new Date().toISOString();
+    const prev = loadBahanRapat();
+
+    // ✅ EDIT MODE: update existing
+    if (editId) {
+      const existing = prev.find((x) => x.id === editId);
+      if (!existing) {
+        alert("Data bahan rapat yang mau diedit tidak ditemukan.");
+        return;
+      }
+
+      const updated: BahanRapat = {
+        ...existing,
+        tanggal,
+        materiRapat,
+        rows: finalRows,
+        updatedAt: now,
+      };
+
+      const next = prev.map((x) => (x.id === editId ? updated : x));
+      saveBahanRapat(next);
+
+      // balik ke daftar + auto open preview
+      router.push(`/bahan_rapat/daftar?open=${encodeURIComponent(editId)}${focusUsulanId ? `&focusUsulan=${encodeURIComponent(focusUsulanId)}` : ""}`);
+      return;
+    }
+
+    // ✅ CREATE MODE: new doc
     const doc: BahanRapat = {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -260,11 +351,10 @@ export default function BuatBahanRapatPage() {
       updatedAt: now,
     };
 
-    const prev = loadBahanRapat();
     const next = [doc, ...prev];
     saveBahanRapat(next);
 
-    router.push("/bahan_rapat/daftar");
+    router.push(`/bahan_rapat/daftar?open=${encodeURIComponent(doc.id)}`);
   }
 
   return (
@@ -280,7 +370,9 @@ export default function BuatBahanRapatPage() {
             </div>
 
             <div className="flex-1 text-center">
-              <div className="text-sm font-bold">MATERI RAPAT</div>
+              <div className="text-sm font-bold">
+                {editId ? "EDIT MATERI RAPAT" : "MATERI RAPAT"}
+              </div>
 
               <div className="mx-auto mt-3 max-w-[420px]">
                 <AutoTextarea
@@ -299,6 +391,7 @@ export default function BuatBahanRapatPage() {
                   className="h-9 w-[170px] rounded border px-2 text-xs"
                 />
               </div>
+
             </div>
 
             <div className="w-[190px]" />
@@ -309,6 +402,7 @@ export default function BuatBahanRapatPage() {
             <table className="w-full border text-[12px]">
               <thead>
                 <tr className="bg-zinc-200">
+                  <Th className="w-[40px] text-center">↕</Th>
                   <Th>NO</Th>
                   <Th>ESL</Th>
                   <Th>JABATAN</Th>
@@ -328,69 +422,109 @@ export default function BuatBahanRapatPage() {
               </thead>
 
               <tbody>
-                {rows.map((r, idx) => (
-                  <tr key={r.no} className="border-t">
-                    <Td className="text-center">{r.no}</Td>
+                {rows.map((r, idx) => {
+                  const highlight =
+                    focusUsulanId &&
+                    String(r.usulanId || "") === String(focusUsulanId);
 
-                    <Td>
-                      <CellInput
-                        value={r.esl}
-                        onChange={(v: string) => updateRow(idx, { esl: v })}
-                      />
-                    </Td>
+                  return (
+                    <tr
+                      key={r.no}
+                      ref={(el) => {
+                        rowRefs.current[idx] = el;
+                      }}
+                      className={[
+                        "border-t",
+                        dragIndex === idx ? "opacity-60" : "",
+                        highlight ? "bg-yellow-100/70" : "",
+                      ].join(" ")}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = Number(e.dataTransfer.getData("text/rowIndex"));
+                        if (Number.isFinite(from)) moveRow(from, idx);
+                        setDragIndex(null);
+                      }}
+                    >
+                      <Td className="text-center">
+                        <button
+                          type="button"
+                          draggable
+                          onDragStart={(e) => {
+                            setDragIndex(idx);
+                            e.dataTransfer.setData("text/rowIndex", String(idx));
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => setDragIndex(null)}
+                          className="cursor-grab active:cursor-grabbing rounded px-2 py-1 hover:bg-zinc-100"
+                          title="Tarik untuk pindahkan baris"
+                        >
+                          ☰
+                        </button>
+                      </Td>
 
-                    <Td>
-                      <CellTextarea
-                        value={r.jabatan}
-                        onChange={(v: string) => updateRow(idx, { jabatan: v })}
-                      />
-                    </Td>
+                      <Td className="text-center">{r.no}</Td>
 
-                    <Td>
-                      <UsulanCombo
-                        value={r.namaPktGolNrpNip}
-                        usulanId={r.usulanId}
-                        options={usulanList}
-                        onChangeValue={(v) =>
-                          updateRow(idx, { namaPktGolNrpNip: v, usulanId: "" })
-                        }
-                        onPick={(u) => applyFromUsulan(idx, u)}
-                        onClearPick={() => clearPickedUsulan(idx)}
-                      />
-                    </Td>
+                      <Td>
+                        <CellInput
+                          value={r.esl}
+                          onChange={(v) => updateRow(idx, { esl: v })}
+                        />
+                      </Td>
 
-                    <Td>
-                      <CellTextarea
-                        value={r.kondisi}
-                        onChange={(v: string) => updateRow(idx, { kondisi: v })}
-                        minRows={2}
-                      />
-                    </Td>
+                      <Td>
+                        <CellTextarea
+                          value={r.jabatan}
+                          onChange={(v) => updateRow(idx, { jabatan: v })}
+                        />
+                      </Td>
 
-                    <Td>
-                      <CellTextarea
-                        value={r.jabatanUsulan}
-                        onChange={(v: string) => updateRow(idx, { jabatanUsulan: v })}
-                        minRows={2}
-                      />
-                    </Td>
+                      <Td>
+                        <UsulanCombo
+                          value={r.namaPktGolNrpNip}
+                          usulanId={r.usulanId}
+                          options={usulanList}
+                          onChangeValue={(v) =>
+                            updateRow(idx, { namaPktGolNrpNip: v, usulanId: "" })
+                          }
+                          onPick={(u) => applyFromUsulan(idx, u)}
+                          onClearPick={() => clearPickedUsulan(idx)}
+                        />
+                      </Td>
 
-                    <Td>
-                      <CellTextarea
-                        value={r.catatan}
-                        onChange={(v: string) => updateRow(idx, { catatan: v })}
-                        minRows={2}
-                      />
-                    </Td>
+                      <Td>
+                        <CellTextarea
+                          value={r.kondisi}
+                          onChange={(v) => updateRow(idx, { kondisi: v })}
+                          minRows={2}
+                        />
+                      </Td>
 
-                    <Td>
-                      <CellTextarea
-                        value={r.ket}
-                        onChange={(v: string) => updateRow(idx, { ket: v })}
-                      />
-                    </Td>
-                  </tr>
-                ))}
+                      <Td>
+                        <CellTextarea
+                          value={r.jabatanUsulan}
+                          onChange={(v) => updateRow(idx, { jabatanUsulan: v })}
+                          minRows={2}
+                        />
+                      </Td>
+
+                      <Td>
+                        <CellTextarea
+                          value={r.catatan}
+                          onChange={(v) => updateRow(idx, { catatan: v })}
+                          minRows={2}
+                        />
+                      </Td>
+
+                      <Td>
+                        <CellTextarea
+                          value={r.ket}
+                          onChange={(v) => updateRow(idx, { ket: v })}
+                        />
+                      </Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -404,6 +538,15 @@ export default function BuatBahanRapatPage() {
               <button type="button" onClick={removeLastRow} className="btn">
                 - Baris
               </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/bahan_rapat/daftar")}
+                className="btn"
+                title="Kembali ke daftar bahan rapat"
+              >
+                Kembali
+              </button>
             </div>
 
             <button
@@ -412,7 +555,7 @@ export default function BuatBahanRapatPage() {
               disabled={!canSave}
               className="btn-primary"
             >
-              Simpan
+              {editId ? "Simpan Perubahan" : "Simpan"}
             </button>
           </div>
         </div>
@@ -422,7 +565,7 @@ export default function BuatBahanRapatPage() {
 }
 
 /* =======================
-   USULAN COMBO (CUSTOM DROPDOWN)
+   USULAN COMBO
 ======================= */
 
 function UsulanCombo({
@@ -530,7 +673,9 @@ function UsulanCombo({
       {open && (
         <div className="absolute z-[9999] mt-2 w-full rounded-md border bg-white shadow-lg">
           {filtered.length === 0 ? (
-            <div className="px-3 py-2 text-[12px] text-zinc-500">Tidak ada data yang cocok.</div>
+            <div className="px-3 py-2 text-[12px] text-zinc-500">
+              Tidak ada data yang cocok.
+            </div>
           ) : (
             <div
               ref={listRef}
@@ -548,19 +693,26 @@ function UsulanCombo({
                   }}
                   className="w-full px-3 py-2 text-left hover:bg-zinc-50"
                 >
-                  <div className="text-[12px] font-semibold text-zinc-900">{u.nama || "-"}</div>
+                  <div className="text-[12px] font-semibold text-zinc-900">
+                    {u.nama || "-"}
+                  </div>
 
                   <div className="mt-0.5 text-[11px] text-zinc-600">
-                    {u.jabatan ? u.jabatan : "-"} <span className="text-zinc-300">•</span>{" "}
+                    {u.jabatan ? u.jabatan : "-"}{" "}
+                    <span className="text-zinc-300">•</span>{" "}
                     {u.esl ? `ESL: ${u.esl}` : "ESL: -"}
                   </div>
 
                   <div className="mt-0.5 text-[11px] text-zinc-600">
-                    {(u.pangkatGol?.trim() || "-") + " / " + (u.nrpNip?.trim() || "-")}
+                    {(u.pangkatGol?.trim() || "-") +
+                      " / " +
+                      (u.nrpNip?.trim() || "-")}
                   </div>
 
                   {u.jabatanUsulan?.trim() ? (
-                    <div className="mt-0.5 text-[11px] text-zinc-500">Usulan: {u.jabatanUsulan}</div>
+                    <div className="mt-0.5 text-[11px] text-zinc-500">
+                      Usulan: {u.jabatanUsulan}
+                    </div>
                   ) : null}
                 </button>
               ))}
@@ -576,15 +728,18 @@ function UsulanCombo({
    UI HELPERS
 ======================= */
 
-function Th({ children, className = "" }: any) {
+type ThProps = { children: React.ReactNode; className?: string };
+function Th({ children, className = "" }: ThProps) {
   return <th className={`border px-3 py-2 font-bold ${className}`}>{children}</th>;
 }
 
-function Td({ children, className = "" }: any) {
+type TdProps = { children: React.ReactNode; className?: string };
+function Td({ children, className = "" }: TdProps) {
   return <td className={`align-top border px-2 py-2 ${className}`}>{children}</td>;
 }
 
-function CellInput({ value, onChange }: any) {
+type CellInputProps = { value: string; onChange: (v: string) => void };
+function CellInput({ value, onChange }: CellInputProps) {
   return (
     <input
       value={value}
@@ -594,7 +749,8 @@ function CellInput({ value, onChange }: any) {
   );
 }
 
-function CellTextarea({ value, onChange, minRows = 1 }: any) {
+type CellTextareaProps = { value: string; onChange: (v: string) => void; minRows?: number };
+function CellTextarea({ value, onChange, minRows = 1 }: CellTextareaProps) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -614,7 +770,8 @@ function CellTextarea({ value, onChange, minRows = 1 }: any) {
   );
 }
 
-function AutoTextarea({ value, onChange, placeholder }: any) {
+type AutoTextareaProps = { value: string; onChange: (v: string) => void; placeholder?: string };
+function AutoTextarea({ value, onChange, placeholder }: AutoTextareaProps) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {

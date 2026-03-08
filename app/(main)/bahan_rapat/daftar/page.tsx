@@ -1,8 +1,23 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Eye, Trash2, Check, Download, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Eye,
+  Trash2,
+  Check,
+  Download,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /* =======================
    TYPES
@@ -15,7 +30,7 @@ type Row = {
   namaPktGolNrpNip: string;
   kondisi: string;
 
-  // ✅ NEW: sesuai Buat Bahan Rapat
+  // ✅ sesuai Buat Bahan Rapat
   jabatanUsulan: string;
 
   catatan: string;
@@ -35,6 +50,12 @@ type BahanRapat = {
 };
 
 const STORAGE_KEY_BAHAN_RAPAT = "bnn_bahan_rapat_v1";
+
+/* =======================
+   ROUTE TARGET
+   ✅ sesuaikan kalau path page Buat Bahan Rapat beda
+======================= */
+const ROUTE_BUAT_BAHAN_RAPAT = "/bahan_rapat/buat";
 
 /* =======================
    A4 LANDSCAPE SETTINGS
@@ -57,25 +78,29 @@ function loadBahanRapat(): BahanRapat[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY_BAHAN_RAPAT);
-    const data = raw ? (JSON.parse(raw) as any[]) : [];
+    const data = raw ? (JSON.parse(raw) as unknown[]) : [];
     if (!Array.isArray(data)) return [];
 
     // ✅ migrasi:
     // - status lama "final" -> "diajukan"
     // - row lama "calonPengisiJabatan" -> "jabatanUsulan"
     return data.map((x) => {
-      const s = x?.status;
+      const obj = x as Record<string, unknown>;
+
+      const s = String(obj?.status ?? "draft");
       const nextStatus: BahanRapat["status"] =
         s === "final"
           ? "diajukan"
           : s === "draft" || s === "dirapatkan" || s === "diajukan"
-          ? s
+          ? (s as BahanRapat["status"])
           : "draft";
 
-      const rowsRaw = Array.isArray(x?.rows) ? x.rows : [];
-      const migratedRows: Row[] = rowsRaw.map((r: any, idx: number) => {
+      const rowsRaw = Array.isArray(obj?.rows) ? (obj.rows as unknown[]) : [];
+      const migratedRows: Row[] = rowsRaw.map((rr, idx) => {
+        const r = rr as Record<string, unknown>;
         const jabatanUsulan =
-          String(r?.jabatanUsulan ?? "").trim() || String(r?.calonPengisiJabatan ?? "").trim();
+          String(r?.jabatanUsulan ?? "").trim() ||
+          String(r?.calonPengisiJabatan ?? "").trim();
 
         return {
           no: Number(r?.no ?? idx + 1),
@@ -91,13 +116,13 @@ function loadBahanRapat(): BahanRapat[] {
       });
 
       return {
-        id: String(x?.id ?? ""),
-        tanggal: String(x?.tanggal ?? ""),
-        materiRapat: String(x?.materiRapat ?? ""),
+        id: String(obj?.id ?? ""),
+        tanggal: String(obj?.tanggal ?? ""),
+        materiRapat: String(obj?.materiRapat ?? ""),
         rows: migratedRows,
         status: nextStatus,
-        createdAt: String(x?.createdAt ?? ""),
-        updatedAt: x?.updatedAt ? String(x.updatedAt) : undefined,
+        createdAt: String(obj?.createdAt ?? ""),
+        updatedAt: obj?.updatedAt ? String(obj.updatedAt) : undefined,
       } as BahanRapat;
     });
   } catch {
@@ -127,7 +152,9 @@ function buildJudul(materiRapat: string) {
   return `MATERI RAPAT ${toUpperClean(m)}`;
 }
 function rowKey(r: Row) {
-  return `${r.no}|${r.usulanId ?? ""}|${r.esl ?? ""}|${r.jabatan ?? ""}`;
+  return `${r.no}|${r.usulanId ?? ""}|${r.esl ?? ""}|${r.jabatan ?? ""}|${
+    r.namaPktGolNrpNip ?? ""
+  }|${r.kondisi ?? ""}|${r.jabatanUsulan ?? ""}|${r.catatan ?? ""}|${r.ket ?? ""}`;
 }
 
 type StatusBR = BahanRapat["status"];
@@ -163,7 +190,6 @@ function buildKeteranganFromRows(rows: Row[]) {
     .filter(Boolean);
 
   if (list.length === 0) return "-";
-
   const uniq = Array.from(new Set(list));
   return uniq.join(", ");
 }
@@ -178,7 +204,7 @@ const COLS = {
   jabatan: "18%",
   nama: "18%",
   kondisi: "14%",
-  jabatanUsulan: "20%", // ✅ ganti dari calon
+  jabatanUsulan: "20%",
   catatan: "12%",
   ket: "10%",
 };
@@ -187,6 +213,7 @@ const COLS = {
    PAGE
 ======================= */
 export default function DaftarBahanRapatPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [items, setItems] = useState<BahanRapat[]>([]);
@@ -245,14 +272,16 @@ export default function DaftarBahanRapatPage() {
 
   function toggleSort(key: SortKey) {
     setListPage(1);
-    setSortKey((prevKey) => {
-      if (prevKey === key) {
-        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        return prevKey;
-      }
-      setSortDir(key === "tanggal" ? "desc" : "asc");
-      return key;
-    });
+
+    // klik kolom yang sama -> toggle
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    // klik kolom baru
+    setSortKey(key);
+    setSortDir(key === "tanggal" ? "desc" : "asc");
   }
 
   function sortIcon(key: SortKey) {
@@ -342,6 +371,18 @@ export default function DaftarBahanRapatPage() {
     setItems(next);
     saveBahanRapat(next);
     if (openId === id) setOpenId(null);
+  }
+
+  // ✅ tombol edit: menuju halaman Buat Bahan Rapat dengan ?edit=<id>
+  function goEdit(docId: string, usulanId?: string) {
+    const params = new URLSearchParams();
+    params.set("edit", docId);
+    if (usulanId) params.set("focusUsulan", usulanId);
+
+    // tutup modal biar rapih
+    setOpenId(null);
+
+    router.push(`${ROUTE_BUAT_BAHAN_RAPAT}?${params.toString()}`);
   }
 
   /* =======================
@@ -462,7 +503,11 @@ export default function DaftarBahanRapatPage() {
         import("jspdf"),
       ]);
 
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
 
       const listPages = pages.length ? pages : [active.rows || []];
 
@@ -508,7 +553,9 @@ export default function DaftarBahanRapatPage() {
         pdf.addImage(img, "PNG", 0, 0, PAGE_W_MM, PAGE_H_MM, undefined, "FAST");
       }
 
-      const fileName = `BahanRapat_${active.tanggal || "tanggal"}_${active.id}.pdf`;
+      const fileName = `BahanRapat_${active.tanggal || "tanggal"}_${
+        active.id
+      }.pdf`;
       pdf.save(fileName);
     } catch (err) {
       console.error(err);
@@ -529,7 +576,9 @@ export default function DaftarBahanRapatPage() {
           <div className="flex items-start justify-between gap-6">
             <div className="w-[190px]" />
             <div className="flex-1 pt-2 text-center">
-              <div className="text-sm font-bold tracking-wide text-zinc-900">DAFTAR BAHAN RAPAT</div>
+              <div className="text-sm font-bold tracking-wide text-zinc-900">
+                DAFTAR BAHAN RAPAT
+              </div>
             </div>
             <div className="w-[190px]" />
           </div>
@@ -548,7 +597,10 @@ export default function DaftarBahanRapatPage() {
                       className="inline-flex w-full items-center justify-center gap-2"
                       title="Sort Nama Rapat"
                     >
-                      NAMA RAPAT <span className="text-[11px] text-zinc-600">{sortIcon("materiRapat")}</span>
+                      NAMA RAPAT{" "}
+                      <span className="text-[11px] text-zinc-600">
+                        {sortIcon("materiRapat")}
+                      </span>
                     </button>
                   </Th>
 
@@ -562,7 +614,10 @@ export default function DaftarBahanRapatPage() {
                       className="inline-flex w-full items-center justify-center gap-2"
                       title="Sort Tanggal"
                     >
-                      TANGGAL <span className="text-[11px] text-zinc-600">{sortIcon("tanggal")}</span>
+                      TANGGAL{" "}
+                      <span className="text-[11px] text-zinc-600">
+                        {sortIcon("tanggal")}
+                      </span>
                     </button>
                   </Th>
 
@@ -575,12 +630,15 @@ export default function DaftarBahanRapatPage() {
                 {sorted.length === 0 ? (
                   <tr className="border-t border-zinc-700">
                     <Td colSpan={6} className="py-10 text-center text-zinc-500">
-                      Belum ada data bahan rapat. Silakan buat dulu di menu “Buat Bahan Rapat”.
+                      Belum ada data bahan rapat. Silakan buat dulu di menu “Buat
+                      Bahan Rapat”.
                     </Td>
                   </tr>
                 ) : (
                   pagedSorted.map((doc, idx) => {
-                    const namaRapat = doc.materiRapat?.trim() ? toUpperClean(doc.materiRapat) : "-";
+                    const namaRapat = doc.materiRapat?.trim()
+                      ? toUpperClean(doc.materiRapat)
+                      : "-";
                     const ketRapat = buildKeteranganFromRows(doc.rows || []);
                     const globalNo = (listPage - 1) * LIST_PAGE_SIZE + idx + 1;
                     const ns = nextStatus(doc.status);
@@ -588,8 +646,12 @@ export default function DaftarBahanRapatPage() {
                     return (
                       <tr key={doc.id} className="border-t border-zinc-700">
                         <Td className="text-center">{globalNo}.</Td>
-                        <Td className="align-top whitespace-pre-wrap font-semibold">{namaRapat}</Td>
-                        <Td className="align-top whitespace-pre-wrap text-zinc-800">{ketRapat}</Td>
+                        <Td className="align-top whitespace-pre-wrap font-semibold">
+                          {namaRapat}
+                        </Td>
+                        <Td className="align-top whitespace-pre-wrap text-zinc-800">
+                          {ketRapat}
+                        </Td>
                         <Td className="text-center">{fmtDate(doc.tanggal)}</Td>
 
                         <Td className="text-center">
@@ -632,7 +694,11 @@ export default function DaftarBahanRapatPage() {
                               onClick={() => onDelete(doc.id)}
                               disabled={doc.status === "diajukan"}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-500/40 bg-white text-red-600 shadow-sm hover:bg-red-50 active:scale-[0.98] disabled:opacity-50"
-                              title={doc.status === "diajukan" ? "Tidak bisa hapus (sudah diajukan)" : "Hapus"}
+                              title={
+                                doc.status === "diajukan"
+                                  ? "Tidak bisa hapus (sudah diajukan)"
+                                  : "Hapus"
+                              }
                             >
                               <Trash2 size={18} />
                             </button>
@@ -649,8 +715,10 @@ export default function DaftarBahanRapatPage() {
             {sorted.length > 0 && (
               <div className="mt-4 flex items-center justify-between gap-3">
                 <div className="text-xs text-zinc-600">
-                  Menampilkan <b>{(listPage - 1) * LIST_PAGE_SIZE + 1}</b> –{" "}
-                  <b>{Math.min(listPage * LIST_PAGE_SIZE, sorted.length)}</b> dari <b>{sorted.length}</b> data
+                  Menampilkan{" "}
+                  <b>{(listPage - 1) * LIST_PAGE_SIZE + 1}</b> –{" "}
+                  <b>{Math.min(listPage * LIST_PAGE_SIZE, sorted.length)}</b>{" "}
+                  dari <b>{sorted.length}</b> data
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -669,7 +737,9 @@ export default function DaftarBahanRapatPage() {
 
                   <button
                     type="button"
-                    onClick={() => setListPage((p) => Math.min(totalListPages, p + 1))}
+                    onClick={() =>
+                      setListPage((p) => Math.min(totalListPages, p + 1))
+                    }
                     disabled={listPage === totalListPages}
                     className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm disabled:opacity-50"
                   >
@@ -696,11 +766,19 @@ export default function DaftarBahanRapatPage() {
             {/* toolbar */}
             <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
               <div>
-                <div className="text-sm font-bold text-zinc-900">Preview A4 Landscape</div>
+                <div className="text-sm font-bold text-zinc-900">
+                  Preview A4 Landscape
+                </div>
                 <div className="mt-1 text-xs text-zinc-600">
                   Nama Rapat:{" "}
-                  <b className="text-zinc-900">{active.materiRapat?.trim() ? toUpperClean(active.materiRapat) : "-"}</b>{" "}
-                  • Tanggal: <b className="text-zinc-900">{fmtDate(active.tanggal)}</b> • Status:{" "}
+                  <b className="text-zinc-900">
+                    {active.materiRapat?.trim()
+                      ? toUpperClean(active.materiRapat)
+                      : "-"}
+                  </b>{" "}
+                  • Tanggal:{" "}
+                  <b className="text-zinc-900">{fmtDate(active.tanggal)}</b> •
+                  Status:{" "}
                   <b
                     className={
                       active.status === "diajukan"
@@ -731,6 +809,24 @@ export default function DaftarBahanRapatPage() {
                     </button>
                   );
                 })()}
+
+                {/* ✅ EDIT */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    goEdit(active.id, focusUsulanId ? focusUsulanId : undefined)
+                  }
+                  disabled={active.status === "diajukan"}
+                  className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                  title={
+                    active.status === "diajukan"
+                      ? "Tidak bisa edit (sudah diajukan)"
+                      : "Edit bahan rapat"
+                  }
+                >
+                  <Pencil size={16} />
+                  Edit
+                </button>
 
                 <button
                   type="button"
@@ -771,7 +867,11 @@ export default function DaftarBahanRapatPage() {
 
                 <button
                   type="button"
-                  onClick={() => setPageIndex((p) => Math.min((pages.length || 1) - 1, p + 1))}
+                  onClick={() =>
+                    setPageIndex((p) =>
+                      Math.min((pages.length || 1) - 1, p + 1)
+                    )
+                  }
                   disabled={pageIndex >= (pages.length || 1) - 1}
                   className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm disabled:opacity-50"
                 >
@@ -817,7 +917,10 @@ export default function DaftarBahanRapatPage() {
               <div ref={measureWrapRef} className="a4l-pdf-page">
                 <div className="a4l-page">
                   <div ref={measureHeaderRef}>
-                    <HeaderBlock judul={buildJudul(active.materiRapat)} tanggal={active.tanggal} />
+                    <HeaderBlock
+                      judul={buildJudul(active.materiRapat)}
+                      tanggal={active.tanggal}
+                    />
                   </div>
 
                   <div style={{ marginTop: 10 }}>
@@ -1005,14 +1108,20 @@ function A4LandscapePageInner({
           <tbody>
             {rows.length ? (
               rows.map((r) => {
-                const isFocus = focusUsulanId && String(r.usulanId || "") === String(focusUsulanId);
+                const isFocus =
+                  focusUsulanId &&
+                  String(r.usulanId || "") === String(focusUsulanId);
 
                 return (
                   <tr
                     key={rowKey(r)}
                     style={
                       isFocus
-                        ? { outline: "3px solid #f59e0b", outlineOffset: "-2px", background: "#fff7ed" }
+                        ? {
+                            outline: "3px solid #f59e0b",
+                            outlineOffset: "-2px",
+                            background: "#fff7ed",
+                          }
                         : undefined
                     }
                   >
@@ -1029,7 +1138,15 @@ function A4LandscapePageInner({
               })
             ) : (
               <tr>
-                <td colSpan={8} style={{ border: "1px solid #000", padding: 12, textAlign: "center", color: "#666" }}>
+                <td
+                  colSpan={8}
+                  style={{
+                    border: "1px solid #000",
+                    padding: 12,
+                    textAlign: "center",
+                    color: "#666",
+                  }}
+                >
                   Tidak ada baris data.
                 </td>
               </tr>
@@ -1044,7 +1161,14 @@ function A4LandscapePageInner({
         </div>
       ) : null}
 
-      <div style={{ marginTop: 6, textAlign: "right", fontSize: 11, color: "#666" }}>
+      <div
+        style={{
+          marginTop: 6,
+          textAlign: "right",
+          fontSize: 11,
+          color: "#666",
+        }}
+      >
         Halaman {pageIndex + 1} / {totalPages}
       </div>
     </div>
@@ -1054,10 +1178,47 @@ function A4LandscapePageInner({
 /* =======================
    HEADER BLOCK
 ======================= */
+/* =======================
+   HEADER BLOCK
+   ✅ Tambah kop BNN kiri atas
+======================= */
 function HeaderBlock({ judul, tanggal }: { judul: string; tanggal: string }) {
+  const LEFT_WIDTH = 220; // supaya judul tetap benar-benar center
+
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ minWidth: 220 }} />
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      {/* KIRI : LOGO TEXT BNN */}
+      <div style={{ minWidth: LEFT_WIDTH }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#111",
+            lineHeight: 1.25,
+          }}
+        >
+          <div>BADAN NARKOTIKA NASIONAL</div>
+          <div>REPUBLIK INDONESIA</div>
+
+          <div
+            style={{
+              marginTop: 8,
+              height: 2,
+              width: 190,
+              backgroundColor: "#3f3f46",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* TENGAH : JUDUL RAPAT */}
       <div style={{ flex: 1, textAlign: "center" }}>
         <div
           style={{
@@ -1066,17 +1227,26 @@ function HeaderBlock({ judul, tanggal }: { judul: string; tanggal: string }) {
             fontWeight: 800,
             lineHeight: 1.25,
             whiteSpace: "pre-wrap",
-            transform: "translateZ(0)",
           }}
         >
           {judul}
         </div>
 
-        <div style={{ marginTop: 4, color: "#111", fontSize: 12, fontWeight: 700, lineHeight: 1.25 }}>
+        <div
+          style={{
+            marginTop: 4,
+            color: "#111",
+            fontSize: 12,
+            fontWeight: 700,
+            lineHeight: 1.25,
+          }}
+        >
           Tanggal {fmtDate(tanggal)}
         </div>
       </div>
-      <div style={{ minWidth: 220 }} />
+
+      {/* KANAN : spacer supaya center */}
+      <div style={{ minWidth: LEFT_WIDTH }} />
     </div>
   );
 }
@@ -1095,7 +1265,15 @@ function FooterBlock() {
 
       <div style={{ paddingTop: 6 }}>
         <div style={{ fontSize: 11, color: "#555" }}>PARAF:</div>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, fontSize: 11 }}>
+        <div
+          style={{
+            marginTop: 8,
+            display: "grid",
+            gridTemplateColumns: "repeat(5, 1fr)",
+            gap: 8,
+            fontSize: 11,
+          }}
+        >
           <ParafBox title="1. SESTAMA" />
           <ParafBox title="2. DEPUTI PENCEGAHAN" />
           <ParafBox title="3. PLT. IRTAMA" />
@@ -1126,7 +1304,13 @@ function ThPDF({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TdPDF({ children, center }: { children: React.ReactNode; center?: boolean }) {
+function TdPDF({
+  children,
+  center,
+}: {
+  children: React.ReactNode;
+  center?: boolean;
+}) {
   return (
     <td
       style={{
@@ -1157,8 +1341,22 @@ function ParafBox({ title }: { title: string }) {
 /* =======================
    TABLE COMPONENTS LIST
 ======================= */
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={["border border-zinc-700 px-3 py-2 font-bold", className].join(" ")}>{children}</th>;
+function Th({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={["border border-zinc-700 px-3 py-2 font-bold", className].join(
+        " "
+      )}
+    >
+      {children}
+    </th>
+  );
 }
 
 function Td({
@@ -1171,7 +1369,10 @@ function Td({
   colSpan?: number;
 }) {
   return (
-    <td colSpan={colSpan} className={["border border-zinc-700 px-2 py-2", className].join(" ")}>
+    <td
+      colSpan={colSpan}
+      className={["border border-zinc-700 px-2 py-2", className].join(" ")}
+    >
       {children}
     </td>
   );

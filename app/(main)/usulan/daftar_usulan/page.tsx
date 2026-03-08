@@ -64,11 +64,6 @@ const STORAGE_KEY_BAHAN_RAPAT = "bnn_bahan_rapat_v1";
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
-/**
- * Load + MIGRASI data lama:
- * - dulu: pktGol
- * - sekarang: pangkatGol + jenisPegawai + jabatanUsulan + keterangan
- */
 function loadUsulan(): Usulan[] {
   if (typeof window === "undefined") return [];
 
@@ -136,7 +131,6 @@ function loadBahanRapat(): BahanRapat[] {
     const data = raw ? (JSON.parse(raw) as any[]) : [];
     if (!Array.isArray(data)) return [];
 
-    // migrasi status lama "final" -> "diajukan" (biar konsisten)
     return data.map((x) => {
       const s = x?.status;
       const nextStatus: BahanRapat["status"] =
@@ -230,6 +224,10 @@ type SortKey =
   | "nrpNip"
   | "createdAt";
 
+// ✅ DEFAULT SORT (buat reset balik ke awal)
+const DEFAULT_SORT_KEY: SortKey = "createdAt";
+const DEFAULT_SORT_DIR: SortDir = "desc";
+
 export default function DaftarUsulanPage() {
   const router = useRouter();
 
@@ -241,23 +239,20 @@ export default function DaftarUsulanPage() {
   const [queryInput, setQueryInput] = useState("");
   const queryDebounced = useDebouncedValue(queryInput, SEARCH_DEBOUNCE_MS);
 
-  // SORT
-  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // ✅ SORT (pakai default)
+  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
+  const [sortDir, setSortDir] = useState<SortDir>(DEFAULT_SORT_DIR);
 
-  // Bahan Rapat data + modal
   const [bahanRapat, setBahanRapat] = useState<BahanRapat[]>([]);
   const [relOpenForUsulanId, setRelOpenForUsulanId] = useState<string | null>(
     null
   );
 
-  // initial load
   useEffect(() => {
     setRows(loadUsulan());
     setBahanRapat(loadBahanRapat());
   }, []);
 
-  // auto refresh bahan rapat saat window fokus
   useEffect(() => {
     const onFocus = () => setBahanRapat(loadBahanRapat());
     window.addEventListener("focus", onFocus);
@@ -266,16 +261,26 @@ export default function DaftarUsulanPage() {
 
   const data = useMemo(() => rows, [rows]);
 
+  // ✅ 3-step sort: ASC -> DESC -> RESET (default)
   function toggleSort(key: SortKey) {
     setPage(1);
-    setSortKey((prevKey) => {
-      if (prevKey !== key) {
-        setSortDir("asc");
-        return key;
-      }
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      return prevKey;
-    });
+
+    // klik kolom baru -> mulai ASC
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+      return;
+    }
+
+    // klik kolom sama -> ASC -> DESC -> reset
+    if (sortDir === "asc") {
+      setSortDir("desc");
+      return;
+    }
+
+    // sortDir === "desc" -> reset ke default awal
+    setSortKey(DEFAULT_SORT_KEY);
+    setSortDir(DEFAULT_SORT_DIR);
   }
 
   function compare(a: Usulan, b: Usulan) {
@@ -338,7 +343,6 @@ export default function DaftarUsulanPage() {
     return getPaginationRange(page, totalPages, 1);
   }, [page, totalPages]);
 
-  // index: usulanId -> list BahanRapat (yang memuat usulanId tersebut)
   const brByUsulanId = useMemo(() => {
     const map = new Map<string, BahanRapat[]>();
     for (const br of bahanRapat) {
@@ -351,7 +355,6 @@ export default function DaftarUsulanPage() {
       }
     }
 
-    // sort rapat by createdAt desc
     for (const [k, list] of map.entries()) {
       map.set(
         k,
@@ -467,8 +470,8 @@ export default function DaftarUsulanPage() {
 
           {editingId && (
             <div className="mt-6 rounded-md border border-[#123473]/20 bg-[#123473]/5 px-4 py-3 text-xs text-[#123473]">
-              Sedang mengedit 1 data. Klik <b>Batal</b> untuk kembali melihat semua
-              daftar.
+              Sedang mengedit 1 data. Klik <b>Batal</b> untuk kembali melihat
+              semua daftar.
             </div>
           )}
 
@@ -476,8 +479,8 @@ export default function DaftarUsulanPage() {
           {!editingId && (
             <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-zinc-600">
-                Menampilkan <b className="text-zinc-900">{filteredData.length}</b>{" "}
-                data
+                Menampilkan{" "}
+                <b className="text-zinc-900">{filteredData.length}</b> data
                 {normalize(queryDebounced) ? (
                   <>
                     {" "}
@@ -607,14 +610,19 @@ export default function DaftarUsulanPage() {
                     const relatedCount = (brByUsulanId.get(r.id) ?? []).length;
 
                     return (
-                      <tr key={r.id} className="border-t border-zinc-700 align-top">
+                      <tr
+                        key={r.id}
+                        className="border-t border-zinc-700 align-top"
+                      >
                         <Td className="text-center">{listNo}.</Td>
 
                         <Td>
                           {isEdit ? (
                             <CellInput
                               value={String(draft.esl ?? "")}
-                              onChange={(v) => setDraft((p) => ({ ...p, esl: v }))}
+                              onChange={(v) =>
+                                setDraft((p) => ({ ...p, esl: v }))
+                              }
                             />
                           ) : (
                             r.esl
@@ -625,7 +633,9 @@ export default function DaftarUsulanPage() {
                           {isEdit ? (
                             <CellInput
                               value={String(draft.jabatan ?? "")}
-                              onChange={(v) => setDraft((p) => ({ ...p, jabatan: v }))}
+                              onChange={(v) =>
+                                setDraft((p) => ({ ...p, jabatan: v }))
+                              }
                             />
                           ) : (
                             r.jabatan
@@ -636,7 +646,9 @@ export default function DaftarUsulanPage() {
                           {isEdit ? (
                             <CellInput
                               value={String(draft.nama ?? "")}
-                              onChange={(v) => setDraft((p) => ({ ...p, nama: v }))}
+                              onChange={(v) =>
+                                setDraft((p) => ({ ...p, nama: v }))
+                              }
                             />
                           ) : (
                             r.nama
@@ -903,7 +915,9 @@ export default function DaftarUsulanPage() {
 
                         <button
                           type="button"
-                          onClick={() => gotoBahanRapat(br.id, relOpenForUsulanId)}
+                          onClick={() =>
+                            gotoBahanRapat(br.id, relOpenForUsulanId)
+                          }
                           className="inline-flex items-center gap-2 rounded-md bg-[#123473] px-3 py-2 text-xs font-semibold text-white hover:brightness-110"
                           title="Buka bahan rapat dan fokus ke usulan ini"
                         >
