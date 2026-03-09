@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Mida/Desktop/siwanjak/app/layout.tsx"],"sourcesContent":["export default function Home() {\n  return (\n    <div className=\"h-screen flex items-center justify-center bg-gray-100\">\n      <h1 className=\"text-4xl font-bold text-blue-600\">\n        Halo, ini website perusahaan!\n      </h1>\n    </div>\n  );\n}\n<div className=\"bg-red-500 text-white p-5\">Test Tailwind</div>\n"],"names":[],"mappings":";;;;;;AAAe,SAAS;IACtB,qBACE,qQAAC;QAAI,WAAU;kBACb,cAAA,qQAAC;YAAG,WAAU;sBAAmC;;;;;;;;;;;AAKvD;cACA,qQAAC;IAAI,WAAU;cAA4B"}},
+    {"offset": {"line": 39, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Mida/Desktop/siwanjak/node_modules/next/src/server/route-modules/app-page/vendored/rsc/react-jsx-dev-runtime.ts"],"sourcesContent":["module.exports = (\n  require('../../module.compiled') as typeof import('../../module.compiled')\n).vendored['react-rsc']!.ReactJsxDevRuntime\n"],"names":["module","exports","require","vendored","ReactJsxDevRuntime"],"mappings":"AAAAA,OAAOC,OAAO,GACZC,QAAQ,6IACRC,QAAQ,CAAC,YAAY,CAAEC,kBAAkB","ignoreList":[0]}}]
+}

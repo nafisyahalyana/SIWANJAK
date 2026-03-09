@@ -1,0 +1,23 @@
+{
+  "devFiles": [],
+  "ampDevFiles": [],
+  "polyfillFiles": [],
+  "lowPriorityFiles": [],
+  "rootMainFiles": [],
+  "pages": {
+    "/_app": [
+      "static/chunks/84eff_next_dist_compiled_653d8d2c._.js",
+      "static/chunks/84eff_next_dist_shared_lib_35b6f6c4._.js",
+      "static/chunks/84eff_next_dist_client_99fcf5a5._.js",
+      "static/chunks/84eff_next_dist_29f14ba7._.js",
+      "static/chunks/84eff_next_app_cadd4d20.js",
+      "static/chunks/[next]_entry_page-loader_ts_0847e22e._.js",
+      "static/chunks/84eff_react-dom_eda92625._.js",
+      "static/chunks/84eff_904c23c2._.js",
+      "static/chunks/[root-of-the-server]__dfdde1b5._.js",
+      "static/chunks/Desktop_siwanjak_pages__app_2da965e7._.js",
+      "static/chunks/turbopack-Desktop_siwanjak_pages__app_209388ca._.js"
+    ]
+  },
+  "ampFirstPages": []
+}

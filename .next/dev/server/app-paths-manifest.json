@@ -1,0 +1,7 @@
+{
+  "/(main)/bahan_rapat/buat/page": "app/(main)/bahan_rapat/buat/page.js",
+  "/(main)/bahan_rapat/daftar/page": "app/(main)/bahan_rapat/daftar/page.js",
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
+  "/(main)/usulan/daftar_usulan/page": "app/(main)/usulan/daftar_usulan/page.js",
+  "/page": "app/page.js"
+}
