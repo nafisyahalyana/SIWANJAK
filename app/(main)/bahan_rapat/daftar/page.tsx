@@ -18,7 +18,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import { Suspense } from "react";
 /* =======================
    TYPES
 ======================= */
@@ -212,7 +212,8 @@ const COLS = {
 /* =======================
    PAGE
 ======================= */
-export default function DaftarBahanRapatPage() {
+// export default function DaftarBahanRapatPage() {
+function DaftarBahanRapatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -1012,6 +1013,13 @@ export default function DaftarBahanRapatPage() {
         }
       `}</style>
     </div>
+  );
+}
+export default function DaftarBahanRapatPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DaftarBahanRapatContent />
+    </Suspense>
   );
 }
 
