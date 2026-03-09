@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import { Suspense } from "react";
 /* =======================
    TYPE & STORAGE
 ======================= */
@@ -211,7 +211,7 @@ function renumberRows(rows: Row[]) {
 /* =======================
    PAGE
 ======================= */
-import { Suspense } from "react";
+
 // export default function BuatBahanRapatPage() {
 function BuatBahanRapatContent() {
   const router = useRouter();
