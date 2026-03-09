@@ -211,8 +211,9 @@ function renumberRows(rows: Row[]) {
 /* =======================
    PAGE
 ======================= */
-
-export default function BuatBahanRapatPage() {
+import { Suspense } from "react";
+// export default function BuatBahanRapatPage() {
+function BuatBahanRapatContent() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -561,6 +562,13 @@ export default function BuatBahanRapatPage() {
         </div>
       </div>
     </div>
+  );
+}
+export default function BuatBahanRapatPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <BuatBahanRapatContent />
+    </Suspense>
   );
 }
 
